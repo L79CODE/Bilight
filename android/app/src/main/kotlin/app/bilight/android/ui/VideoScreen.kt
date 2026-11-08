@@ -73,7 +73,8 @@ import kotlin.math.min
     // controls are animating, which is exactly why the strip ran at 60fps with the controls visible.
     val danmakuView=remember { mutableStateOf<DanmakuView?>(null) }
     var frame by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
+    // DIAGNOSTIC: the per-frame tick is disabled to check whether it caused the playback to pause.
+    if (frame < 0L) LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
     AndroidView(factory={ c -> FrameLayout(c).apply {
         addView(PlayerView(c).apply { player=model.player; useController=false; setKeepContentOnPlayerReset(true); setShutterBackgroundColor(android.graphics.Color.TRANSPARENT) },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
         addView(DanmakuView(c).also { danmakuView.value=it },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
