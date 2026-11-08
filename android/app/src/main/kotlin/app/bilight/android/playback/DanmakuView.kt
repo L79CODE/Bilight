@@ -3,10 +3,6 @@ package app.bilight.android.playback
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.PixelFormat
-import android.graphics.PorterDuff
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import android.graphics.Color
 import android.graphics.Paint
 import android.view.Choreographer
@@ -106,11 +102,11 @@ data class Danmaku(val id: Int,val time: Double,val text: String,val mode: Int) 
     } }
 }
 /**
- * Rendered into its own Surface. The host window only repaints when something above it changes, so a
- * regular View child of a Compose AndroidView was throttled to half the refresh rate whenever the
- * controls were hidden. A SurfaceView owns a separate composition layer and is redrawn directly.
+ * Drawn by the Compose host every frame: the host drives a frame tick so this View is repainted at
+ * display cadence. Left to its own Choreographer callback the draws were coalesced across frames and
+ * the strip ran at half rate whenever no other UI was animating.
  */
-class DanmakuView(context: Context): SurfaceView(context),SurfaceHolder.Callback,Choreographer.FrameCallback {
+class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.WHITE; style=Paint.Style.FILL; typeface=android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL) }
     /** Black outline drawn under the fill; width follows the current text size. */
     private val outline=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.BLACK; style=Paint.Style.STROKE; strokeJoin=Paint.Join.ROUND; typeface=paint.typeface }
@@ -156,11 +152,6 @@ class DanmakuView(context: Context): SurfaceView(context),SurfaceHolder.Callback
     private val labels=mutableListOf<Label>()
     init {
         isClickable=false; importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
-        // Translucent so the video shows through; media-overlay keeps the strip above the player
-        // surface while staying below the window content, so the controls still draw on top.
-        holder.setFormat(PixelFormat.TRANSLUCENT)
-        setZOrderMediaOverlay(true)
-        holder.addCallback(this)
     }
     fun update(player: Player,items: List<Danmaku>,enabled: Boolean,font: Int,area: Float,opacity: Float,controlsVisible: Boolean = false) {
         val fontChanged=this.font!=font
@@ -169,11 +160,11 @@ class DanmakuView(context: Context): SurfaceView(context),SurfaceHolder.Callback
         if (fontChanged) { cache.evictAll(); paintedSize=0f }
         if (reset) { last=Double.NaN; labels.clear() }
         visibility=if (enabled) VISIBLE else GONE
-        if (enabled) { drawFrame(); start() } else stop()
+        if (enabled) { invalidate(); start() } else stop()
     }
-    override fun surfaceCreated(holder: SurfaceHolder) { start() }
-    override fun surfaceChanged(holder: SurfaceHolder,format: Int,width: Int,height: Int) { start() }
-    override fun surfaceDestroyed(holder: SurfaceHolder) { stop() }
+    /** Called by the host on every Compose frame; the paint itself is cheap (cached bitmaps). */
+    fun redraw() { if (enabled) invalidate() }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); start() }
     override fun onDetachedFromWindow() { stop(); super.onDetachedFromWindow() }
     private fun start() { if (!scheduled && enabled && isAttachedToWindow && items.isNotEmpty()) { scheduled=true; Choreographer.getInstance().postFrameCallback(this) } }
     private fun stop() { scheduled=false; Choreographer.getInstance().removeFrameCallback(this) }
@@ -182,16 +173,12 @@ class DanmakuView(context: Context): SurfaceView(context),SurfaceHolder.Callback
     override fun doFrame(frameTimeNanos: Long) {
         scheduled=false
         if (!enabled) return
-        drawFrame()
+        invalidate()
         if (player?.isPlaying==true) start()
     }
-    private fun drawFrame() {
-        if (!holder.surface.isValid) return
-        val canvas=try { holder.lockCanvas() } catch (_: Exception) { return } ?: return
-        try {
-            canvas.drawColor(Color.TRANSPARENT,PorterDuff.Mode.CLEAR)
-            render(canvas)
-        } finally { try { holder.unlockCanvasAndPost(canvas) } catch (_: Exception) {} }
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        render(canvas)
     }
     private fun render(canvas: Canvas) {
         val player=player ?: return; if (!enabled || items.isEmpty()) return

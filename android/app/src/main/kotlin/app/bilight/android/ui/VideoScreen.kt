@@ -67,6 +67,22 @@ import kotlinx.coroutines.*
 import kotlin.math.min
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable private fun PlayerLayer(model: PlaybackModel,modifier: Modifier) {
+    // Compose only repaints a subtree when something inside it changes. Writing a frame tick every
+    // frame keeps this node (and therefore the danmaku View) painting at display cadence even when no
+    // controls are animating, which is exactly why the strip ran at 60fps with the controls visible.
+    val danmakuView=remember { mutableStateOf<DanmakuView?>(null) }
+    var frame by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
+    AndroidView(factory={ c -> FrameLayout(c).apply {
+        addView(PlayerView(c).apply { player=model.player; useController=false; setKeepContentOnPlayerReset(true); setShutterBackgroundColor(android.graphics.Color.TRANSPARENT) },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(DanmakuView(c).also { danmakuView.value=it },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
+    } },update={ _ ->
+        frame.let { }  // read the tick so this node recomposes every frame
+        danmakuView.value?.update(model.player,model.danmakuItems,model.danmaku,model.danmakuFont,model.danmakuArea,model.danmakuOpacity,model.controlsVisible)
+        danmakuView.value?.redraw()
+    },onRelease={ f -> (f.getChildAt(0) as PlayerView).player=null },modifier=modifier)
+}
 @Composable fun VideoScreen(app: AppModel,route: Route.Watch) {
     val model=remember(route,app.http.generation) { app.playback(route) }
     LaunchedEffect(model) { model.enableBackgroundPlayback() }
@@ -185,11 +201,7 @@ import kotlin.math.min
     val accessible=remember { (context.getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager).isTouchExplorationEnabled }
     LaunchedEffect(model.controlsVisible,interaction,dragging,model.settings,model.error) { if (model.controlsVisible && !dragging && !model.settings && model.error==null && !accessible) { delay(1500); model.controlsVisible=false } }
     BoxWithConstraints(modifier.background(Color.Black)) {
-        var danmakuView by remember { mutableStateOf<DanmakuView?>(null) }
-        AndroidView(factory={ c -> FrameLayout(c).apply {
-            addView(PlayerView(c).apply { player=model.player; useController=false; setKeepContentOnPlayerReset(true); setShutterBackgroundColor(android.graphics.Color.TRANSPARENT) },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(DanmakuView(c).also { danmakuView=it },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
-        } },update={ danmakuView?.update(model.player,model.danmakuItems,model.danmaku,model.danmakuFont,model.danmakuArea,model.danmakuOpacity,model.controlsVisible) },onRelease={ frame -> (frame.getChildAt(0) as PlayerView).player=null },modifier=Modifier.fillMaxSize())
+        PlayerLayer(model,Modifier.fillMaxSize())
         if (model.controlsVisible) Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha=.25f),Color.Transparent,Color.Transparent,Color.Black.copy(alpha=.4f)))))
         val widthPx=with(density) { maxWidth.toPx() }
         val tracker=remember { VelocityTracker() }; var travel by remember { mutableFloatStateOf(0f) }; var horizontal by remember { mutableFloatStateOf(0f) }; var originX by remember { mutableFloatStateOf(0f) }
