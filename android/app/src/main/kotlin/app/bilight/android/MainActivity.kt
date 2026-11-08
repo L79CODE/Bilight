@@ -14,8 +14,11 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
 
-    // The app uses white pages even when the system is dark; keep system icons readable.
-    val bars=SystemBarStyle.light(android.graphics.Color.TRANSPARENT,android.graphics.Color.TRANSPARENT)
+    // Follow the system appearance so the system bar icons stay readable in both modes.
+    val nightMode = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+    val dark = nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    val bars = if (dark) SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+               else SystemBarStyle.light(android.graphics.Color.TRANSPARENT,android.graphics.Color.TRANSPARENT)
     enableEdgeToEdge(statusBarStyle=bars,navigationBarStyle=bars)
     setContent {
       MainApp(app)

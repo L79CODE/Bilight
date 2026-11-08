@@ -31,7 +31,7 @@ val Blue = Color(0xff1599c5)
 val Muted = Color(0xff6f7481)
 val Soft = Color(0xfff5f6f8)
 enum class ImageLoadState { LOADING, READY, FAILED }
-@Composable fun RemoteImage(url: String?, description: String?, modifier: Modifier, crop: ContentScale = ContentScale.Crop, onLoadState: (ImageLoadState) -> Unit = {}, backgroundColor: Color = Soft) {
+@Composable fun RemoteImage(url: String?, description: String?, modifier: Modifier, crop: ContentScale = ContentScale.Crop, onLoadState: (ImageLoadState) -> Unit = {}, backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant) {
     val context = LocalContext.current
     val request = remember(url) { ImageRequest.Builder(context).data(url?.let(::secureUrl)).httpHeaders(NetworkHeaders.Builder().set("Referer","https://www.bilibili.com/").set("User-Agent",BiliHttp.USER_AGENT).build()).build() }
     AsyncImage(request,description,modifier.background(backgroundColor),contentScale=crop,onLoading={ onLoadState(ImageLoadState.LOADING) },onSuccess={ onLoadState(ImageLoadState.READY) },onError={ onLoadState(ImageLoadState.FAILED) })
@@ -45,8 +45,8 @@ enum class ImageLoadState { LOADING, READY, FAILED }
     val r = app.relations[mid]; val busy = app.followBusy[mid] == true
     IconButton(onClick={ app.follow(mid) },enabled=!busy,modifier=Modifier.sizeIn(minWidth=44.dp,minHeight=44.dp)) {
         if (busy) CircularProgressIndicator(Modifier.size(14.dp),strokeWidth=1.5.dp)
-        else Surface(shape=RoundedCornerShape(5.dp),border=androidx.compose.foundation.BorderStroke(.75.dp,if (r?.following == true) Pink.copy(alpha=.45f) else Muted.copy(alpha=.4f)),color=Color.Transparent,modifier=Modifier.size(32.dp,26.dp)) {
-            Box(contentAlignment=Alignment.Center) { Icon(if (r?.mutual == true) Icons.Rounded.SwapHoriz else if (r?.following == true) Icons.Rounded.Check else Icons.Rounded.Add,if (r?.following == true) "取消关注" else "关注",Modifier.size(14.dp),tint=if (r?.following == true) Pink else Muted) }
+        else Surface(shape=RoundedCornerShape(5.dp),border=androidx.compose.foundation.BorderStroke(.75.dp,if (r?.following == true) Pink.copy(alpha=.45f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha=.4f)),color=Color.Transparent,modifier=Modifier.size(32.dp,26.dp)) {
+            Box(contentAlignment=Alignment.Center) { Icon(if (r?.mutual == true) Icons.Rounded.SwapHoriz else if (r?.following == true) Icons.Rounded.Check else Icons.Rounded.Add,if (r?.following == true) "取消关注" else "关注",Modifier.size(14.dp),tint=if (r?.following == true) Pink else MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -57,7 +57,7 @@ enum class ImageLoadState { LOADING, READY, FAILED }
             Text(clock(video.duration),Modifier.align(Alignment.BottomEnd).padding(5.dp).background(Color.Black.copy(alpha=.6f),RoundedCornerShape(3.dp)).padding(horizontal=4.dp,vertical=1.dp),color=Color.White,fontSize=11.sp)
         }
         Text(video.title,Modifier.padding(top=7.dp).then(if (onTitleClick!=null) Modifier.fillMaxWidth().heightIn(min=44.dp).clickable(onClick=onTitleClick) else Modifier),maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=14.sp,lineHeight=20.sp)
-        Text(video.owner.name + if (video.views > 0) " · ${count(video.views)}播放" else "",Modifier.padding(top=4.dp),fontSize=11.sp,color=Muted,maxLines=1,overflow=TextOverflow.Ellipsis)
+        Text(video.owner.name + if (video.views > 0) " · ${count(video.views)}播放" else "",Modifier.padding(top=4.dp),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
 }
 @Composable fun ErrorNotice(error: String?, retry: (() -> Unit)? = null) {
@@ -68,13 +68,13 @@ enum class ImageLoadState { LOADING, READY, FAILED }
     }
 }
 @Composable fun Loading(label: String = "正在加载") {
-    Row(Modifier.fillMaxWidth().padding(24.dp),Arrangement.Center,Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(17.dp),strokeWidth=2.dp); Spacer(Modifier.width(10.dp)); Text(label,color=Muted,fontSize=13.sp) }
+    Row(Modifier.fillMaxWidth().padding(24.dp),Arrangement.Center,Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(17.dp),strokeWidth=2.dp); Spacer(Modifier.width(10.dp)); Text(label,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=13.sp) }
 }
 @Composable fun PageMore(busy: Boolean, more: Boolean, error: String?, load: () -> Unit) {
     ErrorNotice(error,load)
     if (busy) Loading() else if (more && error==null) Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.Center) { TextButton(onClick=load) { Text("加载更多") } }
 }
-@Composable fun EmptyNotice(label: String) { Text(label,Modifier.fillMaxWidth().padding(24.dp),color=Muted) }
+@Composable fun EmptyNotice(label: String) { Text(label,Modifier.fillMaxWidth().padding(24.dp),color=MaterialTheme.colorScheme.onSurfaceVariant) }
 /** Large text gets the full row width instead of being squeezed beside a fixed thumbnail. */
 @Composable fun MediaSummaryLayout(thumbnailWidth: Int, thumbnail: @Composable (Modifier) -> Unit, content: @Composable ColumnScope.() -> Unit) {
     if (LocalDensity.current.fontScale>1.4f) Column {

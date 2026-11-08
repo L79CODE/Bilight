@@ -38,7 +38,7 @@ import app.bilight.android.playback.PlaybackModel
     ModalBottomSheet(onDismissRequest = close,sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),dragHandle=null) {
         Column(Modifier.weight(1f,fill=false).fillMaxWidth().verticalScroll(rememberScrollState()).padding(start=20.dp,top=20.dp,end=20.dp).navigationBarsPadding()) {
             Text("下载视频", style = MaterialTheme.typography.titleLarge)
-            Text("P${part.page} ${part.title}", Modifier.padding(top = 12.dp), fontSize = 14.sp, color = Muted)
+            Text("P${part.page} ${part.title}", Modifier.padding(top = 12.dp), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 playback.qualities.forEach { quality -> FilterChip(selected == quality.id, onClick = { selected = quality.id }, label = { Text(quality.label) }) }
             }
@@ -62,7 +62,7 @@ import app.bilight.android.playback.PlaybackModel
         ErrorNotice(store.error,store::retry); ErrorNotice(exportError)
         if (app.user == null) { TextButton(onClick = { app.showLogin = true }) { Text("登录B站") }; return }
         if (!store.ready) { if (store.error==null) Loading(); return }
-        if (store.items.isEmpty()) Text("暂无下载", Modifier.padding(24.dp), color = Muted)
+        if (store.items.isEmpty()) Text("暂无下载", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             items(store.items, key = { it.id }) { item ->
                 Column {
@@ -71,7 +71,7 @@ import app.bilight.android.playback.PlaybackModel
                     }) {
                         MediaSummaryLayout(110,thumbnail={ RemoteImage(item.video.cover,item.video.title,it) }) {
                             Text(item.video.title, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, fontSize = 14.sp)
-                            Text("P${item.part.page} · ${item.label} · ${item.state.label}", color = Muted, fontSize = 12.sp)
+                            Text("P${item.part.page} · ${item.label} · ${item.state.label}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             item.error?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
                         }
                     }

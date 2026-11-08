@@ -22,7 +22,7 @@ enum class BiliActionKind { LIKE, COIN, FAVORITE, DOWNLOAD }
 
 /** Original silhouettes shared with the iOS implementation; visible ink fits the same 22dp bounds. */
 @Composable fun BiliActionIcon(kind: BiliActionKind, label: String, selected: Boolean = false) {
-    val color = if (selected) Pink else Muted
+    val color = if (selected) Pink else MaterialTheme.colorScheme.onSurfaceVariant
     Canvas(Modifier.size(22.dp).semantics { contentDescription = label }) {
         val path = Path()
         when (kind) {

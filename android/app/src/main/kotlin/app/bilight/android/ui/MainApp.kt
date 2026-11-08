@@ -31,6 +31,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,8 +51,40 @@ import kotlinx.coroutines.ensureActive
 import androidx.compose.ui.platform.testTag
 
 @Composable fun MainApp(app: AppModel) {
-    MaterialTheme(colorScheme=lightColorScheme(primary=Pink,secondary=Blue,background=Color.White,surface=Color.White,onSurface=Color(0xff292a32),surfaceContainerLow=Color.White,surfaceContainer=Color.White,surfaceContainerHigh=Color.White,surfaceContainerHighest=Soft,secondaryContainer=Pink.copy(alpha=.1f),onSecondaryContainer=Pink)) {
+    val dark = isSystemInDarkTheme()
+    val scheme = if (dark) darkColorScheme(
+        primary = Color(0xffe56a94),
+        onPrimary = Color(0xff2a0d17),
+        secondary = Color(0xff5ec2e0),
+        background = Color(0xff141419),
+        onBackground = Color(0xffe8e8ec),
+        surface = Color(0xff141419),
+        onSurface = Color(0xffe8e8ec),
+        surfaceVariant = Color(0xff26262e),
+        onSurfaceVariant = Color(0xffa0a1ac),
+        surfaceContainerLowest = Color(0xff101015),
+        surfaceContainerLow = Color(0xff1a1a20),
+        surfaceContainer = Color(0xff202027),
+        surfaceContainerHigh = Color(0xff26262e),
+        surfaceContainerHighest = Color(0xff2c2c35),
+        outlineVariant = Color(0xff34343d),
+        secondaryContainer = Color(0x33d63d6e),
+        onSecondaryContainer = Color(0xffe56a94),
+    ) else lightColorScheme(primary=Pink,secondary=Blue,background=Color.White,surface=Color.White,onSurface=Color(0xff292a32),surfaceContainerLow=Color.White,surfaceContainer=Color.White,surfaceContainerHigh=Color.White,surfaceContainerHighest=Soft,secondaryContainer=Pink.copy(alpha=.1f),onSecondaryContainer=Pink)
+    MaterialTheme(colorScheme=scheme) {
         Surface(Modifier.fillMaxSize()) {
+            // uiMode is in configChanges, so the Activity survives a system theme switch; sync the
+            // system bar icon appearance here instead of relying on a recreation.
+            val view = LocalView.current
+            LaunchedEffect(dark) {
+                var ctx: android.content.Context? = view.context
+                while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
+                val window = (ctx as? android.app.Activity)?.window ?: return@LaunchedEffect
+                androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !dark
+                    isAppearanceLightNavigationBars = !dark
+                }
+            }
             val route = app.routes.lastOrNull()
             BackHandler(enabled=route != null) { app.back() }
             when (route) {
@@ -74,11 +107,11 @@ import androidx.compose.ui.platform.testTag
 }
 @Composable private fun Root(app: AppModel) {
     Scaffold(topBar={ Row(Modifier.statusBarsPadding().fillMaxWidth().height(52.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-        IconButton(onClick={ if (app.requireLogin()) app.showAccount=true }) { app.user?.let { Avatar(it,30) } ?: Icon(Icons.Rounded.AccountCircle,"我的账号",tint=Muted) }
+        IconButton(onClick={ if (app.requireLogin()) app.showAccount=true }) { app.user?.let { Avatar(it,30) } ?: Icon(Icons.Rounded.AccountCircle,"我的账号",tint=MaterialTheme.colorScheme.onSurfaceVariant) }
         Spacer(Modifier.weight(1f))
-        IconButton(onClick={ app.open(Route.Downloads) }) { Icon(Icons.Rounded.Download,"我的下载",tint=Muted) }
-        IconButton(onClick={ if (app.requireLogin()) app.open(Route.History) }) { Icon(Icons.Rounded.History,"我的历史",tint=Muted) }
-    } },bottomBar={ NavigationBar(containerColor=Color.White) {
+        IconButton(onClick={ app.open(Route.Downloads) }) { Icon(Icons.Rounded.Download,"我的下载",tint=MaterialTheme.colorScheme.onSurfaceVariant) }
+        IconButton(onClick={ if (app.requireLogin()) app.open(Route.History) }) { Icon(Icons.Rounded.History,"我的历史",tint=MaterialTheme.colorScheme.onSurfaceVariant) }
+    } },bottomBar={ NavigationBar(containerColor=MaterialTheme.colorScheme.surface) {
         NavigationBarItem(selected=app.tab==0,onClick={ app.tab=0 },icon={ Icon(Icons.Rounded.Search,"搜索") },label={ Text("搜索") },colors=NavigationBarItemDefaults.colors(selectedIconColor=Pink,selectedTextColor=Pink,indicatorColor=Color.Transparent))
         NavigationBarItem(selected=app.tab==1,onClick={ app.enterFollowing() },icon={ Icon(painterResource(R.drawable.brand_playback),"关注",Modifier.size(26.dp)) },label={ Text("关注") },colors=NavigationBarItemDefaults.colors(selectedIconColor=Pink,selectedTextColor=Pink,indicatorColor=Color.Transparent))
     } }) { padding ->
@@ -86,9 +119,9 @@ import androidx.compose.ui.platform.testTag
     }
 }
 @Composable private fun CapsuleSearchField(value: String,onValueChange: (String) -> Unit,placeholder: String,clearLabel: String,onClear: () -> Unit,onSearch: () -> Unit,modifier: Modifier = Modifier,autoCorrectEnabled: Boolean = true) {
-    OutlinedTextField(value=value,onValueChange=onValueChange,modifier=modifier.fillMaxWidth().heightIn(min=52.dp),shape=RoundedCornerShape(100),singleLine=true,placeholder={ Text(placeholder,color=Muted,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis) },leadingIcon={ Icon(Icons.Rounded.Search,null,tint=Muted) },trailingIcon={
+    OutlinedTextField(value=value,onValueChange=onValueChange,modifier=modifier.fillMaxWidth().heightIn(min=52.dp),shape=RoundedCornerShape(100),singleLine=true,placeholder={ Text(placeholder,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=14.sp,maxLines=1,overflow=TextOverflow.Ellipsis) },leadingIcon={ Icon(Icons.Rounded.Search,null,tint=MaterialTheme.colorScheme.onSurfaceVariant) },trailingIcon={
         if (value.isNotEmpty()) IconButton(onClick=onClear) { Icon(Icons.Rounded.Close,clearLabel) }
-    },keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search,autoCorrectEnabled=autoCorrectEnabled),keyboardActions=KeyboardActions(onSearch={ onSearch() }),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=Color(0xffe5e6eb),focusedBorderColor=Pink,unfocusedContainerColor=Soft,focusedContainerColor=Color.White))
+    },keyboardOptions=KeyboardOptions(imeAction=ImeAction.Search,autoCorrectEnabled=autoCorrectEnabled),keyboardActions=KeyboardActions(onSearch={ onSearch() }),colors=OutlinedTextFieldDefaults.colors(unfocusedBorderColor=MaterialTheme.colorScheme.outlineVariant,focusedBorderColor=Pink,unfocusedContainerColor=MaterialTheme.colorScheme.surfaceVariant,focusedContainerColor=MaterialTheme.colorScheme.surface))
 }
 @Composable private fun SearchField(app: AppModel,modifier: Modifier = Modifier) {
     val focus=LocalFocusManager.current
@@ -101,7 +134,7 @@ import androidx.compose.ui.platform.testTag
         Box(modifier.fillMaxSize().clickable(indication=null,interactionSource=remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { focus.clearFocus() }) {
             Column(Modifier.align(Alignment.Center).offset(y=centerCorrection-112.dp),horizontalAlignment=Alignment.CenterHorizontally) {
                 Row(verticalAlignment=Alignment.CenterVertically) { Icon(painterResource(R.drawable.brand_playback),null,Modifier.size(40.dp),tint=Pink); Spacer(Modifier.width(10.dp)); Text("Bilight",fontSize=34.sp,fontWeight=FontWeight.Bold) }
-                Text("搜你所想，看你所选",Modifier.padding(top=12.dp),fontSize=15.sp,color=Muted,maxLines=1)
+                Text("搜你所想，看你所选",Modifier.padding(top=12.dp),fontSize=15.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=1)
             }
             SearchField(app,Modifier.align(Alignment.Center).offset(y=centerCorrection).padding(horizontal=28.dp))
         }
@@ -114,14 +147,14 @@ import androidx.compose.ui.platform.testTag
         LazyColumn(state=searchList,modifier=Modifier.fillMaxSize(),contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(18.dp)) {
             if (app.searchUsers) items(app.searchItems.filterIsInstance<User>(),key={ it.mid }) { UserRow(app,it) }
             else items(app.searchItems.filterIsInstance<Video>().chunked(2)) { row -> VideoRow(app,row) }
-            if (!app.searchBusy && app.searchItems.isEmpty() && app.searchError==null) item { Text("没有找到相关内容",Modifier.padding(24.dp),color=Muted) }
+            if (!app.searchBusy && app.searchItems.isEmpty() && app.searchError==null) item { Text("没有找到相关内容",Modifier.padding(24.dp),color=MaterialTheme.colorScheme.onSurfaceVariant) }
             item { PageMore(app.searchBusy,app.searchMore,app.searchError) { app.search(false) } }
         }
     }
 }
 @Composable fun UserRow(app: AppModel,user: User) {
     Row(Modifier.fillMaxWidth().clickable { app.open(Route.Creator(user)) }.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
-        Avatar(user,44); Column(Modifier.weight(1f).padding(horizontal=12.dp)) { Text(user.name,fontWeight=FontWeight.Medium); if (user.sign.isNotEmpty()) Text(user.sign,fontSize=12.sp,color=Muted,maxLines=2,overflow=TextOverflow.Ellipsis) }; FollowButton(app,user.mid)
+        Avatar(user,44); Column(Modifier.weight(1f).padding(horizontal=12.dp)) { Text(user.name,fontWeight=FontWeight.Medium); if (user.sign.isNotEmpty()) Text(user.sign,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=2,overflow=TextOverflow.Ellipsis) }; FollowButton(app,user.mid)
     }
 }
 @Composable fun VideoRow(app: AppModel,videos: List<Video>) {
@@ -146,15 +179,15 @@ import androidx.compose.ui.platform.testTag
     DisposableEffect(Unit) { onDispose { if (app.sessionRevision==revision) { app.feedIndex=list.firstVisibleItemIndex; app.feedOffset=list.firstVisibleItemScrollOffset; app.feedAnchor=app.following.getOrNull(list.firstVisibleItemIndex)?.id } } }
     Column(modifier) {
         Text("我的关注",Modifier.padding(horizontal=20.dp,vertical=12.dp),fontSize=25.sp,fontWeight=FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().height(8.dp).background(Soft))
-        if (app.user == null) { Column(Modifier.fillMaxSize(),Arrangement.Center,Alignment.CenterHorizontally) { Text("登录后查看关注动态",color=Muted); TextButton(onClick={ app.showLogin=true }) { Text("登录B站") } }; return }
+        Box(Modifier.fillMaxWidth().height(8.dp).background(MaterialTheme.colorScheme.surfaceVariant))
+        if (app.user == null) { Column(Modifier.fillMaxSize(),Arrangement.Center,Alignment.CenterHorizontally) { Text("登录后查看关注动态",color=MaterialTheme.colorScheme.onSurfaceVariant); TextButton(onClick={ app.showLogin=true }) { Text("登录B站") } }; return }
         PullToRefreshBox(state=refreshState,isRefreshing=app.feedRefreshing,onRefresh={ userScrolled=false; app.loadFeed(true) },indicator={
             PullToRefreshDefaults.Indicator(state=refreshState,isRefreshing=app.feedRefreshing,
                 modifier=Modifier.align(Alignment.TopCenter).semantics { if (app.feedRefreshing) contentDescription="正在刷新关注动态" })
         }) {
             LazyColumn(state=list,modifier=Modifier.fillMaxSize().padding(top=refreshInset).nestedScroll(connection)) {
-                items(app.following,key={ it.id }) { PostCard(app,it); Box(Modifier.fillMaxWidth().height(8.dp).background(Soft)) }
-                if (app.feedLoaded && app.following.isEmpty() && !app.feedMore && app.feedError==null) item { Text("暂无关注动态",Modifier.padding(24.dp),color=Muted) }
+                items(app.following,key={ it.id }) { PostCard(app,it); Box(Modifier.fillMaxWidth().height(8.dp).background(MaterialTheme.colorScheme.surfaceVariant)) }
+                if (app.feedLoaded && app.following.isEmpty() && !app.feedMore && app.feedError==null) item { Text("暂无关注动态",Modifier.padding(24.dp),color=MaterialTheme.colorScheme.onSurfaceVariant) }
                 if (!app.feedRefreshing) item { PageMore(app.feedBusy,app.feedMore,app.feedError) { userScrolled=false; app.loadFeed() } }
             }
         }
@@ -173,12 +206,12 @@ import androidx.compose.ui.platform.testTag
     var menu by remember { mutableStateOf(false) }
     val context=LocalContext.current
     fun share() { runCatching { context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT,"https://t.bilibili.com/${post.id}"),"分享动态链接")) }.onFailure { app.error="暂无可用于分享的应用。" } }
-    Column(Modifier.fillMaxWidth().background(if (nested) Soft else Color.White).padding(if (nested) 12.dp else 16.dp)) {
+    Column(Modifier.fillMaxWidth().background(if (nested) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface).padding(if (nested) 12.dp else 16.dp)) {
         Row(verticalAlignment=Alignment.CenterVertically) {
             Avatar(post.author,36) { app.open(Route.Creator(post.author)) }
-            Column(Modifier.weight(1f).padding(start=10.dp)) { Text(post.author.name,fontSize=14.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.clickable { app.open(Route.Creator(post.author)) }); Text(java.text.SimpleDateFormat("M月d日 HH:mm",java.util.Locale.CHINA).format(java.util.Date(post.published*1000))+" ${post.action}",fontSize=11.sp,color=Muted) }
+            Column(Modifier.weight(1f).padding(start=10.dp)) { Text(post.author.name,fontSize=14.sp,fontWeight=FontWeight.SemiBold,modifier=Modifier.clickable { app.open(Route.Creator(post.author)) }); Text(java.text.SimpleDateFormat("M月d日 HH:mm",java.util.Locale.CHINA).format(java.util.Date(post.published*1000))+" ${post.action}",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }
             if (!nested) Box {
-                IconButton(onClick={ menu=true }) { Icon(Icons.Rounded.MoreHoriz,"动态操作",tint=Muted) }
+                IconButton(onClick={ menu=true }) { Icon(Icons.Rounded.MoreHoriz,"动态操作",tint=MaterialTheme.colorScheme.onSurfaceVariant) }
                 DropdownMenu(menu,onDismissRequest={ menu=false }) {
                     if (!detail) DropdownMenuItem(text={ Text("查看动态") },onClick={ menu=false; app.open(Route.Dynamic(post)) })
                     DropdownMenuItem(text={ Text("分享链接") },onClick={ menu=false; share() })
@@ -203,23 +236,23 @@ import androidx.compose.ui.platform.testTag
             }
         }
         post.original?.let { Spacer(Modifier.height(12.dp)); PostCard(app,it,nested=true,detail=detail) }
-        post.unavailable?.let { Text(it,Modifier.padding(top=12.dp),color=Muted,fontSize=13.sp) }
-        post.link?.let { link -> Column(Modifier.fillMaxWidth().background(Soft,RoundedCornerShape(7.dp)).padding(12.dp)) {
+        post.unavailable?.let { Text(it,Modifier.padding(top=12.dp),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=13.sp) }
+        post.link?.let { link -> Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant,RoundedCornerShape(7.dp)).padding(12.dp)) {
             Row { link.cover?.let { RemoteImage(it,link.title,Modifier.size(76.dp).clip(RoundedCornerShape(5.dp))); Spacer(Modifier.width(10.dp)) }
-                Column(Modifier.weight(1f)) { Text(link.title,fontSize=14.sp,fontWeight=FontWeight.Medium); Text(link.summary,Modifier.padding(top=6.dp),fontSize=12.sp,color=Muted,maxLines=if (detail) Int.MAX_VALUE else 3,overflow=TextOverflow.Ellipsis); Text(link.label,Modifier.padding(top=6.dp),fontSize=10.sp,color=Blue) }
+                Column(Modifier.weight(1f)) { Text(link.title,fontSize=14.sp,fontWeight=FontWeight.Medium); Text(link.summary,Modifier.padding(top=6.dp),fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=if (detail) Int.MAX_VALUE else 3,overflow=TextOverflow.Ellipsis); Text(link.label,Modifier.padding(top=6.dp),fontSize=10.sp,color=Blue) }
             }
             if (detail && link.url!=null) TextButton(onClick={ runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(link.url))) }.onFailure { app.error="暂无可打开原文的应用。" } }) { Text("打开原文") }
             else if (!detail) TextButton(onClick={ app.open(Route.Dynamic(post)) }) { Text("查看动态") }
         } }
         if (!nested) Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-            TextButton(onClick=::share) { Icon(Icons.Rounded.Share,"分享动态链接",Modifier.size(17.dp),tint=Muted); Text(if (post.forwards>0) count(post.forwards) else "分享",Modifier.padding(start=5.dp),color=Muted,fontSize=12.sp) }
+            TextButton(onClick=::share) { Icon(Icons.Rounded.Share,"分享动态链接",Modifier.size(17.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant); Text(if (post.forwards>0) count(post.forwards) else "分享",Modifier.padding(start=5.dp),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp) }
             Spacer(Modifier.weight(1f))
-            if (detail) Row(verticalAlignment=Alignment.CenterVertically) { Icon(Icons.Rounded.ChatBubbleOutline,"${post.comments}条评论",Modifier.size(17.dp),tint=Muted); Text(count(post.comments),Modifier.padding(start=5.dp),color=Muted,fontSize=12.sp) }
-            else TextButton(onClick={ app.open(Route.Dynamic(post)) },modifier=Modifier.testTag("dynamic-open-${post.id}")) { Icon(Icons.Rounded.ChatBubbleOutline,"查看动态详情，共${post.comments}条评论",Modifier.size(17.dp),tint=Muted); Text(count(post.comments),Modifier.padding(start=5.dp),color=Muted,fontSize=12.sp) }
+            if (detail) Row(verticalAlignment=Alignment.CenterVertically) { Icon(Icons.Rounded.ChatBubbleOutline,"${post.comments}条评论",Modifier.size(17.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant); Text(count(post.comments),Modifier.padding(start=5.dp),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp) }
+            else TextButton(onClick={ app.open(Route.Dynamic(post)) },modifier=Modifier.testTag("dynamic-open-${post.id}")) { Icon(Icons.Rounded.ChatBubbleOutline,"查看动态详情，共${post.comments}条评论",Modifier.size(17.dp),tint=MaterialTheme.colorScheme.onSurfaceVariant); Text(count(post.comments),Modifier.padding(start=5.dp),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp) }
             Spacer(Modifier.weight(1f))
             TextButton(onClick={ app.toggleDynamicLike(post) },enabled=!pending,modifier=Modifier.heightIn(min=44.dp).testTag("dynamic-like-${post.id}").semantics(mergeDescendants=true) { contentDescription=(if(selected) "取消动态点赞" else "点赞动态")+"，${likes}赞"+(if(pending) "，正在处理" else "") }) {
-                Icon(if(selected) Icons.Rounded.ThumbUp else Icons.Rounded.ThumbUpOffAlt,null,Modifier.size(17.dp),tint=if(selected) Pink else Muted)
-                Text(count(likes),Modifier.padding(start=5.dp),color=if(selected) Pink else Muted,fontSize=12.sp)
+                Icon(if(selected) Icons.Rounded.ThumbUp else Icons.Rounded.ThumbUpOffAlt,null,Modifier.size(17.dp),tint=if(selected) Pink else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(count(likes),Modifier.padding(start=5.dp),color=if(selected) Pink else MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
             }
         }
     }
@@ -231,11 +264,11 @@ import androidx.compose.ui.platform.testTag
     ModalBottomSheet(onDismissRequest={ app.showAccount=false },sheetState=rememberModalBottomSheetState(skipPartiallyExpanded=true),dragHandle=null) {
       Column(Modifier.weight(1f,fill=false).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding()) {
         app.user?.let { user -> Row(Modifier.padding(20.dp).clickable { app.open(Route.Creator(user)) },verticalAlignment=Alignment.CenterVertically) { Avatar(user,48); Text(user.name,Modifier.weight(1f).padding(start=12.dp),maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=20.sp,fontWeight=FontWeight.SemiBold) } }
-        listOf("我的关注的人" to Route.People(false),"我的收藏" to Route.Favorites,"我的下载" to Route.Downloads,"常访问的UP主" to Route.People(true)).forEach { (label,route) -> TextButton(onClick={ app.open(route) },modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),contentPadding=PaddingValues(horizontal=22.dp)) { Text(label,Modifier.weight(1f),color=MaterialTheme.colorScheme.onSurface); Icon(Icons.Rounded.ChevronRight,null,tint=Muted) } }
+        listOf("我的关注的人" to Route.People(false),"我的收藏" to Route.Favorites,"我的下载" to Route.Downloads,"常访问的UP主" to Route.People(true)).forEach { (label,route) -> TextButton(onClick={ app.open(route) },modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),contentPadding=PaddingValues(horizontal=22.dp)) { Text(label,Modifier.weight(1f),color=MaterialTheme.colorScheme.onSurface); Icon(Icons.Rounded.ChevronRight,null,tint=MaterialTheme.colorScheme.onSurfaceVariant) } }
         if (frequent==null && error==null) Loading("正在读取常访问")
         ErrorNotice(error) { refresh++ }
         frequent?.let { people -> LazyRow(contentPadding=PaddingValues(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(16.dp)) { items(people,key={ it.mid }) { person -> Column(Modifier.width(62.dp).clickable { app.open(Route.Creator(person)) },horizontalAlignment=Alignment.CenterHorizontally) { Avatar(person,52); Text(person.name,Modifier.padding(top=8.dp),fontSize=11.sp,maxLines=1,overflow=TextOverflow.Ellipsis) } } } }
-        TextButton(onClick=app::logout,modifier=Modifier.padding(10.dp)) { Text("退出登录",color=Muted) }
+        TextButton(onClick=app::logout,modifier=Modifier.padding(10.dp)) { Text("退出登录",color=MaterialTheme.colorScheme.onSurfaceVariant) }
       }
     }
 }
@@ -278,7 +311,7 @@ internal class Paging<T> {
                 if (matches.isEmpty()) item {
                     EmptyNotice(if (!search.complete) "正在更新关注名单，已读取的用户中暂未找到匹配。" else if (searching) "没有匹配的关注用户，试试名字或拼音。" else "还没有关注 UP 主")
                 } else {
-                    if (searching) item { Text("找到 ${matches.size} 个用户关注用户",fontSize=12.sp,color=Muted) }
+                    if (searching) item { Text("找到 ${matches.size} 个用户关注用户",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }
                     items(matches,key={ it.mid }) { UserRow(app,it) }
                 }
             }
@@ -298,7 +331,7 @@ private class CreatorBrowseState(user: User) {
     LaunchedEffect(state) { if (!state.profileLoaded) { try { info=app.repository.creator(user.mid); state.profileLoaded=true } catch (e: CancellationException) { throw e } catch (e: Exception) { error=e.message; state.profileLoaded=true } } }
     Column(Modifier.safeDrawingPadding()) {
         SectionTitle(info.name,app::back)
-        Row(Modifier.padding(20.dp),verticalAlignment=Alignment.CenterVertically) { Avatar(info,56); Column(Modifier.weight(1f).padding(horizontal=12.dp)) { Text(info.name,fontSize=20.sp,fontWeight=FontWeight.Bold); Text(info.sign,fontSize=12.sp,color=Muted,maxLines=3,overflow=TextOverflow.Ellipsis) }; FollowButton(app,info.mid) }
+        Row(Modifier.padding(20.dp),verticalAlignment=Alignment.CenterVertically) { Avatar(info,56); Column(Modifier.weight(1f).padding(horizontal=12.dp)) { Text(info.name,fontSize=20.sp,fontWeight=FontWeight.Bold); Text(info.sign,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant,maxLines=3,overflow=TextOverflow.Ellipsis) }; FollowButton(app,info.mid) }
         ErrorNotice(error)
         TabRow(mode) { listOf("投稿","合集和列表").forEachIndexed { i,label -> Tab(selected=mode==i,onClick={ mode=i },text={ Text(label) }) } }
         if (mode==0) {
@@ -308,7 +341,7 @@ private class CreatorBrowseState(user: User) {
         } else {
             val paging=state.collections; val scope=rememberCoroutineScope()
             LaunchedEffect(paging) { if (paging.page==0 && paging.error==null) paging.load { p,_ -> app.repository.collections(user.mid,p) } }
-            LazyColumn(state=paging.listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) { items(paging.items) { c -> Row(Modifier.clickable { app.open(Route.Catalog(info,c)) },verticalAlignment=Alignment.CenterVertically) { RemoteImage(c.cover,c.title,Modifier.size(100.dp,64.dp).clip(RoundedCornerShape(6.dp))); Column(Modifier.padding(start=12.dp)) { Text(c.title); Text("${if (c.series) "列表" else "合集"} · ${c.total}个视频",fontSize=12.sp,color=Muted) } } }; item { PageMore(paging.busy,paging.more,paging.error) { scope.launch { paging.load { p,_ -> app.repository.collections(user.mid,p) } } } } }
+            LazyColumn(state=paging.listState,contentPadding=PaddingValues(16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) { items(paging.items) { c -> Row(Modifier.clickable { app.open(Route.Catalog(info,c)) },verticalAlignment=Alignment.CenterVertically) { RemoteImage(c.cover,c.title,Modifier.size(100.dp,64.dp).clip(RoundedCornerShape(6.dp))); Column(Modifier.padding(start=12.dp)) { Text(c.title); Text("${if (c.series) "列表" else "合集"} · ${c.total}个视频",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) } } }; item { PageMore(paging.busy,paging.more,paging.error) { scope.launch { paging.load { p,_ -> app.repository.collections(user.mid,p) } } } } }
         }
     }
 }
@@ -326,9 +359,9 @@ private class FavoritesBrowseState {
                 RemoteImage(folder.cover,folder.title,Modifier.size(96.dp,64.dp).clip(RoundedCornerShape(8.dp)))
                 Column(Modifier.padding(start=12.dp)) {
                     Text(if (folder.readError!=null && folder.title.isBlank()) "收藏条目读取失败" else folder.title)
-                    if (folder.readError==null) Text("${folder.count}个内容${if (folder.type==21) " · 合集" else if (folder.private) " · 私密" else ""}",fontSize=12.sp,color=Muted)
+                    if (folder.readError==null) Text("${folder.count}个内容${if (folder.type==21) " · 合集" else if (folder.private) " · 私密" else ""}",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     val warning=when { folder.readError!=null -> folder.readError; folder.mid<=0 -> "创建者信息不可用"; folder.unavailable -> "收藏夹已失效"; folder.type !in listOf(11,21) -> "此类收藏暂不支持打开"; else -> null }
-                    warning?.let { Text(it,fontSize=12.sp,color=Muted) }
+                    warning?.let { Text(it,fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant) }
                     if (folder.readError!=null) TextButton(enabled=!paging.busy,onClick={ scope.launch { paging.load(reset=true) { p,_ -> app.repository.folders(collected,p) } } }) { Text("重新读取收藏目录") }
                 }
             } }
@@ -359,12 +392,12 @@ private class FavoritesBrowseState {
                 items(paging.items,key={ it.video.bvid }) { history -> Box(Modifier.fillMaxWidth().clickable { app.open(Route.Watch(history.video.bvid,history.page,if (history.completed) 0 else history.progress,cid=history.cid.takeIf { it>0 })) }) {
                     MediaSummaryLayout(130,thumbnail={ RemoteImage(history.video.cover,history.video.title,it.clip(RoundedCornerShape(6.dp))) }) {
                         Text(history.video.title,maxLines=3,overflow=TextOverflow.Ellipsis,fontSize=14.sp)
-                        Text(history.video.owner.name,color=Muted,fontSize=12.sp)
-                        Text("P${history.page} · "+(if (history.completed) "已看完" else "看到 ${clock(history.progress)}"),color=Muted,fontSize=12.sp)
-                        Text(java.text.SimpleDateFormat("M月d日 HH:mm",java.util.Locale.CHINA).format(java.util.Date(history.viewedAt*1000)),color=Muted,fontSize=11.sp)
+                        Text(history.video.owner.name,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
+                        Text("P${history.page} · "+(if (history.completed) "已看完" else "看到 ${clock(history.progress)}"),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
+                        Text(java.text.SimpleDateFormat("M月d日 HH:mm",java.util.Locale.CHINA).format(java.util.Date(history.viewedAt*1000)),color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=11.sp)
                     }
                 } }
-                if (!paging.busy && paging.items.isEmpty() && paging.error==null) item { Text("暂无播放记录",color=Muted) }
+                if (!paging.busy && paging.items.isEmpty() && paging.error==null) item { Text("暂无播放记录",color=MaterialTheme.colorScheme.onSurfaceVariant) }
                 item { PageMore(paging.busy,paging.more,paging.error) { scope.launch { load() } } }
             }
         }
@@ -437,18 +470,18 @@ private class FavoritesBrowseState {
         CommentContentRow(app,comment)
         if (comment.replyCount>0) Column(Modifier.padding(start=42.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Text("共${total}条回复",fontSize=12.sp,color=Muted)
+                Text("共${total}条回复",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick={ expanded=!expanded },modifier=Modifier.heightIn(min=44.dp).testTag("comment-expand-${comment.id}"),contentPadding=PaddingValues(0.dp)) { Text(if (expanded) "收起" else "展开",fontSize=12.sp,color=blue) }
             }
             if (expanded) Column(Modifier.fillMaxWidth().padding(start=12.dp).testTag("comment-replies-${comment.id}"),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 replies.forEach { reply -> key(reply.id) { CommentContentRow(app,reply,true) } }
-                if (busy) Text("正在读取回复…",fontSize=12.sp,color=Muted)
+                if (busy) Text("正在读取回复…",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 error?.let { Text(it,fontSize=12.sp,color=Pink); TextButton(onClick={ retry++ },contentPadding=PaddingValues(0.dp)) { Text("重试",fontSize=12.sp,color=blue) } }
-                if (!busy && error==null && loadedPage>0 && replies.isEmpty()) Text("暂时没有可见回复。",fontSize=12.sp,color=Muted)
+                if (!busy && error==null && loadedPage>0 && replies.isEmpty()) Text("暂时没有可见回复。",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
                 if (!busy && error==null && more) TextButton(onClick={ requestedPage=loadedPage+1 },modifier=Modifier.testTag("comment-replies-more-${comment.id}"),contentPadding=PaddingValues(0.dp)) { Text("加载更多",fontSize=12.sp,color=blue) }
             }
         }
-        HorizontalDivider(Modifier.padding(top=14.dp),thickness=0.5.dp,color=Color(0xfff1f2f3))
+        HorizontalDivider(Modifier.padding(top=14.dp),thickness=0.5.dp,color=MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
@@ -456,10 +489,10 @@ private class FavoritesBrowseState {
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(if(reply) 8.dp else 10.dp)) {
         Avatar(comment.user,if(reply) 24 else 32) { app.open(Route.Creator(comment.user)) }
         Column(Modifier.weight(1f)) {
-            Text(comment.user.name,color=Muted,fontSize=12.sp)
+            Text(comment.user.name,color=MaterialTheme.colorScheme.onSurfaceVariant,fontSize=12.sp)
             Text(comment.text,Modifier.padding(top=5.dp),fontSize=if(reply) 13.sp else 14.sp,lineHeight=22.sp)
-            if (comment.createdAt>0) Text(java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.getDefault()).format(java.util.Date(comment.createdAt*1000)),fontSize=11.sp,color=Muted)
-            if (comment.likes>0) Text("${count(comment.likes)}赞",fontSize=11.sp,color=Muted)
+            if (comment.createdAt>0) Text(java.text.SimpleDateFormat("yyyy-MM-dd",java.util.Locale.getDefault()).format(java.util.Date(comment.createdAt*1000)),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            if (comment.likes>0) Text("${count(comment.likes)}赞",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

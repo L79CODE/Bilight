@@ -37,7 +37,7 @@ import app.bilight.android.core.Folder
                 if (folders==null && error==null) Loading()
                 if (folders!=null) {
                     TextButton(onClick={ onSelection(emptySet()) },enabled=selected.isNotEmpty() && !creating) { Text("取消全部") }
-                    if (folders.isEmpty()) Text("暂无收藏夹，可在下方新建",style=MaterialTheme.typography.bodyMedium,color=Muted)
+                    if (folders.isEmpty()) Text("暂无收藏夹，可在下方新建",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)
                     folders.sortedByDescending { it.selected }.forEach { folder ->
                         val checked=folder.id in selected
                         val enabled=!creating && (checked || folder.selected || folder.count<folder.capacity)
@@ -48,7 +48,7 @@ import app.bilight.android.core.Folder
                             Column(Modifier.weight(1f).padding(end=12.dp)) {
                                 Text(folder.title,style=MaterialTheme.typography.bodyLarge)
                                 Text("${folder.count}/${folder.capacity}${if (folder.private) " · 私密" else " · 公开"}${if (folder.count>=folder.capacity) " · 已满" else ""}",
-                                    style=MaterialTheme.typography.bodySmall,color=Muted)
+                                    style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Checkbox(checked=checked,onCheckedChange=null,enabled=enabled)
                         }
