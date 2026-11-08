@@ -69,23 +69,15 @@ import kotlin.math.min
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable private fun PlayerLayer(model: PlaybackModel,modifier: Modifier) {
-    // Compose only repaints a subtree when something inside it changes. Writing a frame tick every
-    // frame keeps this node (and therefore the danmaku View) painting at display cadence even when no
-    // controls are animating, which is exactly why the strip ran at 60fps with the controls visible.
+    // The strip drives its own frame loop. Driving it from Compose was tried both ways and rejected:
+    // ticking in update{} stalled playback, ticking in the draw phase made the video stutter.
     val danmakuView=remember { mutableStateOf<DanmakuView?>(null) }
-    var frame by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
     AndroidView(factory={ c -> FrameLayout(c).apply {
         addView(PlayerView(c).apply { player=model.player; useController=false; setKeepContentOnPlayerReset(true); setShutterBackgroundColor(android.graphics.Color.TRANSPARENT) },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
         addView(DanmakuView(c).also { danmakuView.value=it },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
     } },update={ _ ->
-        // Not on the frame path: only parameter changes reach this lambda now.
         danmakuView.value?.update(model.player,model.danmakuItems,model.danmaku,model.danmakuFont,model.danmakuArea,model.danmakuOpacity,model.controlsVisible)
-        danmakuView.value?.redraw()
-    },onRelease={ f -> (f.getChildAt(0) as PlayerView).player=null },
-    // The tick is read during draw, so it invalidates the draw phase only and never recomposes this
-    // node. Reading it in update{} made every frame recompose the layer, which stalled playback.
-    modifier=modifier.drawWithContent { frame.let { }; drawContent() })
+    },onRelease={ f -> (f.getChildAt(0) as PlayerView).player=null },modifier=modifier)
 }
 @Composable fun VideoScreen(app: AppModel,route: Route.Watch) {
     val model=remember(route,app.http.generation) { app.playback(route) }
