@@ -154,7 +154,10 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     override fun onDetachedFromWindow() { stop(); super.onDetachedFromWindow() }
     private fun start() { if (!scheduled && enabled && isAttachedToWindow && items.isNotEmpty()) { scheduled=true; Choreographer.getInstance().postFrameCallback(this) } }
     private fun stop() { scheduled=false; Choreographer.getInstance().removeFrameCallback(this) }
-    override fun doFrame(frameTimeNanos: Long) { scheduled=false; if (!enabled || !isAttachedToWindow) return; invalidate(); if (player?.isPlaying==true) start() }
+    // invalidate() from inside a Choreographer callback can be folded into the next frame when the
+    // current vsync has already scheduled its traversal, which halves the effective frame rate.
+    // postInvalidateOnAnimation() explicitly asks for the next animation frame instead.
+    override fun doFrame(frameTimeNanos: Long) { scheduled=false; if (!enabled || !isAttachedToWindow) return; postInvalidateOnAnimation(); if (player?.isPlaying==true) start() }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas); val player=player ?: return; if (!enabled || items.isEmpty()) return
         val time=player.currentPosition/1000.0
