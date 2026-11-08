@@ -87,6 +87,10 @@ import kotlin.math.min
     var keepFullscreenOnReturn by remember(model) { mutableStateOf(model.fullscreen) }
     var portraitTask by remember { mutableStateOf<Job?>(null) }
     fun orientation(value: Int) { if (activity.requestedOrientation!=value) activity.requestedOrientation=value }
+    // Only the sensor-driven path consults this; an explicit fullscreen tap always wins.
+    fun autoRotateOn(): Boolean = try {
+        android.provider.Settings.System.getInt(activity.contentResolver,android.provider.Settings.System.ACCELEROMETER_ROTATION,0)==1
+    } catch (_: Exception) { true }
     fun exit() {
         if (exiting) return
         portraitTask?.cancel(); exiting=currentLandscape && model.fullscreen
@@ -100,14 +104,14 @@ import kotlin.math.min
         suppressRotation=false; keepFullscreenOnReturn=false
         model.portraitFullscreen=model.aspectRatio<1f
         model.fullscreen=true; model.controlsVisible=true; seenLandscape=false
-        orientation(if (model.portraitFullscreen) ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+        orientation(if (model.portraitFullscreen) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
     }
     // Change layout only with the target window orientation. The embedded player never stretches first.
     val presentedFullscreen=fullscreenPresentation(model.fullscreen,model.portraitFullscreen,landscape,keepFullscreenOnReturn,exiting)
     BackHandler(model.fullscreen || exiting) { exit() }
     LaunchedEffect(landscape) { if (!landscape) exiting=false }
     DisposableEffect(model) {
-        orientation(if (model.fullscreen) ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+        orientation(if (model.fullscreen) (if (model.portraitFullscreen) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE) else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
         onDispose {
             portraitTask?.cancel()
             if (!activity.isChangingConfigurations) { app.releasePlayback(model); orientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) }
@@ -121,13 +125,16 @@ import kotlin.math.min
                 val vertical=angle in 0..20 || angle in 340..359
                 if (horizontal) {
                     portraitTask?.cancel()
+                    // System auto-rotate off means "do not follow the sensor"; the fullscreen button
+                    // still switches orientation because toggleFullscreen() does not go through here.
+                    if (!autoRotateOn()) return
                     if (!suppressRotation && !model.fullscreen) {
                         model.fullscreen=true; model.portraitFullscreen=false; keepFullscreenOnReturn=false
                         orientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
                     }
                     if (model.fullscreen) {
                         seenLandscape=true; keepFullscreenOnReturn=false
-                        orientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR)
+                        orientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
                     }
                 } else if (vertical) {
                     if (suppressRotation) suppressRotation=false
