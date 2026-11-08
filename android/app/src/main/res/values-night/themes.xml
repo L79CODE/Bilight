@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Bilight" parent="android:Theme.Material.NoActionBar" />
+    <!-- Matches the Compose dark surface, so the status bar strip never shows the
+         framework's pure-black window background behind the edge-to-edge content. -->
+    <style name="Theme.Bilight" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF141419</item>
+    </style>
 </resources>

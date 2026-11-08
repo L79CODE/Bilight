@@ -73,13 +73,14 @@ import androidx.compose.ui.platform.testTag
     ) else lightColorScheme(primary=Pink,secondary=Blue,background=Color.White,surface=Color.White,onSurface=Color(0xff292a32),surfaceContainerLow=Color.White,surfaceContainer=Color.White,surfaceContainerHigh=Color.White,surfaceContainerHighest=Soft,secondaryContainer=Pink.copy(alpha=.1f),onSecondaryContainer=Pink)
     MaterialTheme(colorScheme=scheme) {
         Surface(Modifier.fillMaxSize()) {
-            // uiMode is in configChanges, so the Activity survives a system theme switch; sync the
-            // system bar icon appearance here instead of relying on a recreation.
+            // uiMode is in configChanges, so the Activity survives a system theme switch. Reapply on
+            // every composition (SideEffect, not LaunchedEffect) so a dialog or sheet that changes the
+            // system bar appearance cannot leave dark icons on a dark background.
             val view = LocalView.current
-            LaunchedEffect(dark) {
+            SideEffect {
                 var ctx: android.content.Context? = view.context
                 while (ctx is android.content.ContextWrapper && ctx !is android.app.Activity) ctx = ctx.baseContext
-                val window = (ctx as? android.app.Activity)?.window ?: return@LaunchedEffect
+                val window = (ctx as? android.app.Activity)?.window ?: return@SideEffect
                 androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
                     isAppearanceLightStatusBars = !dark
                     isAppearanceLightNavigationBars = !dark
