@@ -101,6 +101,8 @@ data class Danmaku(val id: Int,val time: Double,val text: String,val mode: Int) 
 /** Native frame callbacks draw fixed-color text; Compose recomposition is never the animation clock. */
 class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.WHITE; style=Paint.Style.FILL; typeface=android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL) }
+    /** Black outline drawn under the fill; width follows the current text size. */
+    private val outline=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.BLACK; style=Paint.Style.STROKE; strokeJoin=Paint.Join.ROUND; typeface=paint.typeface }
     private var player: Player?=null
     private var items=emptyList<Danmaku>()
     private var font=20
@@ -145,8 +147,10 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
         paint.textSize=font*resources.displayMetrics.scaledDensity
         if (lastTextSize!=paint.textSize) { widths.evictAll(); labels.clear(); last=Double.NaN; lastTextSize=paint.textSize }
         paint.alpha=(opacity*255).toInt(); paint.setShadowLayer(1.25f*resources.displayMetrics.density,0f,0f,Color.BLACK)
-        val line=paint.textSize*1.5f
-        val lanes=(((height-top-bottom)*area)/line).toInt().coerceIn(1,18)
+        // Same alpha on both layers keeps the opacity setting behaving exactly as before.
+        outline.textSize=paint.textSize; outline.alpha=paint.alpha; outline.strokeWidth=paint.textSize*.12f
+        val line=paint.textSize*1.45f
+        val lanes=(((height-top-bottom)*area)/line).toInt().coerceIn(1,20)
         val reset=!last.isFinite() || time<last-.2 || time-last>1.5 || lastWidth!=width || lastHeight!=height
         if (reset) { labels.clear(); index=items.binarySearchBy((time-8).coerceAtLeast(0.0)) { it.time }.let { if (it<0) -it-1 else it }; lastWidth=width; lastHeight=height }
         labels.removeAll { time-it.item.time>=if (it.item.mode in listOf(4,5)) 4 else 8 }
@@ -170,6 +174,7 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
         for (label in labels) {
             val age=(time-label.item.time).toFloat()
             val x=when (label.item.mode) { 4,5 -> left+(usableWidth-label.width)/2; 6 -> left- label.width+label.speed*age; else -> left+usableWidth-label.speed*age }
+            canvas.drawText(label.item.text,x,top+(label.lane+1)*line-paint.textSize*.25f,outline)
             canvas.drawText(label.item.text,x,top+(label.lane+1)*line-paint.textSize*.25f,paint)
         }
         canvas.restore(); last=time
