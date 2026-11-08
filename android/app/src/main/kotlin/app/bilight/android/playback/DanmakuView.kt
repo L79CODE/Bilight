@@ -1,6 +1,7 @@
 package app.bilight.android.playback
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -26,6 +27,7 @@ import java.nio.charset.CharacterCodingException
 import java.util.zip.GZIPInputStream
 import java.util.zip.Inflater
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 
@@ -103,6 +105,19 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     private val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.WHITE; style=Paint.Style.FILL; typeface=android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL) }
     /** Black outline drawn under the fill; width follows the current text size. */
     private val outline=Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { color=Color.BLACK; style=Paint.Style.STROKE; strokeJoin=Paint.Join.ROUND; typeface=paint.typeface }
+    /** Carries only the fade factor when blitting a cached label. */
+    private val bitmapPaint=Paint(Paint.FILTER_BITMAP_FLAG)
+    /**
+     * Text rendering (especially the stroke outline) is far too expensive to run per frame, so every
+     * label is rasterized once and blitted afterwards. Sized in bytes, not entries.
+     */
+    private val cache=object: android.util.LruCache<String,Bitmap>(4*1024*1024) {
+        override fun sizeOf(key: String,value: Bitmap)=value.byteCount
+    }
+    private var renderPad=0
+    private var renderAscent=0f
+    private var paintedSize=0f
+    private var paintedAlpha=-1
     private var player: Player?=null
     private var items=emptyList<Danmaku>()
     private var font=20
@@ -115,16 +130,23 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     private var last=Double.NaN
     private var lastWidth=0
     private var lastHeight=0
-    private var lastTextSize=0f
+    private var insetFrame=0
+    private var insetWidth=0
+    private var insetHeight=0
+    private var insetTop=0
+    private var insetLeft=0
+    private var insetRight=0
+    private var insetBottom=0
     private val location=IntArray(2)
-    private data class Label(val item: Danmaku,val lane: Int,val width: Float,val speed: Float)
+    private data class Label(val item: Danmaku,val lane: Int,val width: Float,val speed: Float,val bitmap: Bitmap)
     private val labels=mutableListOf<Label>()
-    private val widths=object: android.util.LruCache<String,Float>(1000) {}
     init { isClickable=false; importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO }
     fun update(player: Player,items: List<Danmaku>,enabled: Boolean,font: Int,area: Float,opacity: Float,controlsVisible: Boolean = false) {
-        val reset=this.items !== items || this.font!=font || this.area!=area
+        val fontChanged=this.font!=font
+        val reset=this.items !== items || fontChanged || this.area!=area
         this.player=player; this.items=items; this.enabled=enabled; this.font=font; this.area=area.coerceIn(.25f,1f); this.opacity=opacity.coerceIn(.2f,1f); this.controlsVisible=controlsVisible
-        if (reset) { last=Double.NaN; labels.clear(); widths.evictAll() }
+        if (fontChanged) { cache.evictAll(); paintedSize=0f }
+        if (reset) { last=Double.NaN; labels.clear() }
         visibility=if (enabled) VISIBLE else GONE
         if (enabled) { invalidate(); start() } else stop()
     }
@@ -136,20 +158,33 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas); val player=player ?: return; if (!enabled || items.isEmpty()) return
         val time=player.currentPosition/1000.0
-        val insets=ViewCompat.getRootWindowInsets(this)?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.systemBars())
-        getLocationInWindow(location)
+        // Window insets and the on-screen offset only change on rotation/resize, so they are
+        // refreshed periodically instead of on every frame.
+        if (insetFrame++%30==0 || insetWidth!=width || insetHeight!=height) {
+            val insets=ViewCompat.getRootWindowInsets(this)?.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.systemBars())
+            getLocationInWindow(location)
+            insetTop=insets?.top ?: 0; insetLeft=insets?.left ?: 0; insetRight=insets?.right ?: 0; insetBottom=insets?.bottom ?: 0
+            insetWidth=width; insetHeight=height
+        }
+        val density=resources.displayMetrics.density
         // Controls sit inside the safe area; reserve their height after the system inset.
-        val top=max(0,(insets?.top ?: 0)-location[1])+(if(controlsVisible) 48f else 4f)*resources.displayMetrics.density
-        val left=max(0,(insets?.left ?: 0)-location[0]).toFloat()
-        val right=max(0,location[0]+width-(rootView.width-(insets?.right ?: 0))).toFloat()
-        val bottom=max(0,location[1]+height-(rootView.height-(insets?.bottom ?: 0)))+(if(controlsVisible) 56f else 0f)*resources.displayMetrics.density
+        val top=max(0,insetTop-location[1])+(if(controlsVisible) 48f else 4f)*density
+        val left=max(0,insetLeft-location[0]).toFloat()
+        val right=max(0,location[0]+width-(rootView.width-insetRight)).toFloat()
+        val bottom=max(0,location[1]+height-(rootView.height-insetBottom))+(if(controlsVisible) 56f else 0f)*density
         val usableWidth=(width-left-right).coerceAtLeast(1f)
-        paint.textSize=font*resources.displayMetrics.scaledDensity
-        if (lastTextSize!=paint.textSize) { widths.evictAll(); labels.clear(); last=Double.NaN; lastTextSize=paint.textSize }
-        paint.alpha=(opacity*255).toInt(); paint.setShadowLayer(1.25f*resources.displayMetrics.density,0f,0f,Color.BLACK)
-        // Same alpha on both layers keeps the opacity setting behaving exactly as before.
-        outline.textSize=paint.textSize; outline.alpha=paint.alpha; outline.strokeWidth=paint.textSize*.12f
-        val line=paint.textSize*1.45f
+        val textSize=font*resources.displayMetrics.scaledDensity
+        // Paint state is expensive to touch; only rebuild it when the size actually changes.
+        if (paintedSize!=textSize) {
+            paint.textSize=textSize; outline.textSize=textSize; outline.strokeWidth=textSize*.12f
+            paint.setShadowLayer(1.25f*density,0f,0f,Color.BLACK)
+            renderAscent=paint.fontMetrics.ascent
+            renderPad=ceil(outline.strokeWidth+2.5f*density).toInt().coerceAtLeast(1)
+            cache.evictAll(); labels.clear(); last=Double.NaN; paintedSize=textSize
+        }
+        val alpha=(opacity*255).toInt()
+        if (paintedAlpha!=alpha) { paintedAlpha=alpha; bitmapPaint.alpha=alpha }
+        val line=textSize*1.45f
         val lanes=(((height-top-bottom)*area)/line).toInt().coerceIn(1,20)
         val reset=!last.isFinite() || time<last-.2 || time-last>1.5 || lastWidth!=width || lastHeight!=height
         if (reset) { labels.clear(); index=items.binarySearchBy((time-8).coerceAtLeast(0.0)) { it.time }.let { if (it<0) -it-1 else it }; lastWidth=width; lastHeight=height }
@@ -157,7 +192,8 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
         while (index<items.size && items[index].time<=time) {
             val item=items[index++]; val fixed=item.mode in listOf(4,5)
             if (time-item.time >= (if (fixed) 4 else 8) || labels.size>=40) continue
-            val textWidth=widths.get(item.text) ?: paint.measureText(item.text).also { widths.put(item.text,it) }
+            val bitmap=labelFor(item.text) ?: continue
+            val textWidth=(bitmap.width-renderPad*2).toFloat()
             val speed=(usableWidth+textWidth)/8f
             val candidates=if (item.mode==4) (lanes-1 downTo 0) else (0 until lanes)
             val lane=candidates.firstOrNull { lane -> labels.filter { it.lane==lane }.all { previous ->
@@ -168,15 +204,31 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
                     gap>24*resources.displayMetrics.density && (speed<=previous.speed || gap/(speed-previous.speed)>=8-age)
                 }
             } }
-            if (lane!=null) labels.add(Label(item,lane,textWidth,speed))
+            if (lane!=null) labels.add(Label(item,lane,textWidth,speed,bitmap))
         }
         canvas.save(); canvas.clipRect(left,top,width-right,min(height-bottom,top+lanes*line))
         for (label in labels) {
             val age=(time-label.item.time).toFloat()
             val x=when (label.item.mode) { 4,5 -> left+(usableWidth-label.width)/2; 6 -> left- label.width+label.speed*age; else -> left+usableWidth-label.speed*age }
-            canvas.drawText(label.item.text,x,top+(label.lane+1)*line-paint.textSize*.25f,outline)
-            canvas.drawText(label.item.text,x,top+(label.lane+1)*line-paint.textSize*.25f,paint)
+            val baseline=top+(label.lane+1)*line-textSize*.25f
+            canvas.drawBitmap(label.bitmap,x-renderPad,baseline-renderPad+renderAscent,bitmapPaint)
         }
         canvas.restore(); last=time
+    }
+    /** Rasterizes one label (outline + fill + shadow) once; the LruCache keeps repeats free. */
+    private fun labelFor(text: String): Bitmap? {
+        cache.get(text)?.let { return it }
+        val metrics=paint.fontMetrics
+        val textWidth=ceil(paint.measureText(text)).toInt()
+        val textHeight=ceil(metrics.descent-metrics.ascent).toInt()
+        if (textWidth<=0 || textHeight<=0 || textWidth>4096 || textHeight>1024) return null
+        return try {
+            val bitmap=Bitmap.createBitmap(textWidth+renderPad*2,textHeight+renderPad*2,Bitmap.Config.ARGB_8888)
+            val canvas=Canvas(bitmap)
+            val baseline=renderPad-metrics.ascent
+            canvas.drawText(text,renderPad.toFloat(),baseline,outline)
+            canvas.drawText(text,renderPad.toFloat(),baseline,paint)
+            cache.put(text,bitmap); bitmap
+        } catch (_: OutOfMemoryError) { null }
     }
 }
