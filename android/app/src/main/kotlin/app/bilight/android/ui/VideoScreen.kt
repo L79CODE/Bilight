@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.LayoutDirection
@@ -73,16 +74,18 @@ import kotlin.math.min
     // controls are animating, which is exactly why the strip ran at 60fps with the controls visible.
     val danmakuView=remember { mutableStateOf<DanmakuView?>(null) }
     var frame by remember { mutableLongStateOf(0L) }
-    // DIAGNOSTIC: the per-frame tick is disabled to check whether it caused the playback to pause.
-    if (frame < 0L) LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
+    LaunchedEffect(Unit) { while (true) { withFrameNanos { frame=it } } }
     AndroidView(factory={ c -> FrameLayout(c).apply {
         addView(PlayerView(c).apply { player=model.player; useController=false; setKeepContentOnPlayerReset(true); setShutterBackgroundColor(android.graphics.Color.TRANSPARENT) },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
         addView(DanmakuView(c).also { danmakuView.value=it },FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT))
     } },update={ _ ->
-        frame.let { }  // read the tick so this node recomposes every frame
+        // Not on the frame path: only parameter changes reach this lambda now.
         danmakuView.value?.update(model.player,model.danmakuItems,model.danmaku,model.danmakuFont,model.danmakuArea,model.danmakuOpacity,model.controlsVisible)
         danmakuView.value?.redraw()
-    },onRelease={ f -> (f.getChildAt(0) as PlayerView).player=null },modifier=modifier)
+    },onRelease={ f -> (f.getChildAt(0) as PlayerView).player=null },
+    // The tick is read during draw, so it invalidates the draw phase only and never recomposes this
+    // node. Reading it in update{} made every frame recompose the layer, which stalled playback.
+    modifier=modifier.drawWithContent { frame.let { }; drawContent() })
 }
 @Composable fun VideoScreen(app: AppModel,route: Route.Watch) {
     val model=remember(route,app.http.generation) { app.playback(route) }

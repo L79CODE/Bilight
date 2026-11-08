@@ -154,9 +154,13 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
         isClickable=false; importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO
     }
     fun update(player: Player,items: List<Danmaku>,enabled: Boolean,font: Int,area: Float,opacity: Float,controlsVisible: Boolean = false) {
+        val nextArea=area.coerceIn(.25f,1f); val nextOpacity=opacity.coerceIn(.2f,1f)
+        // Short circuit for the per-frame redraw path: re-entering the full body would restart the
+        // frame callback and reassign visibility on every tick.
+        if (this.player===player && this.items===items && this.enabled==enabled && this.font==font && this.area==nextArea && this.opacity==nextOpacity && this.controlsVisible==controlsVisible) return
         val fontChanged=this.font!=font
-        val reset=this.items !== items || fontChanged || this.area!=area
-        this.player=player; this.items=items; this.enabled=enabled; this.font=font; this.area=area.coerceIn(.25f,1f); this.opacity=opacity.coerceIn(.2f,1f); this.controlsVisible=controlsVisible
+        val reset=this.items !== items || fontChanged || this.area!=nextArea
+        this.player=player; this.items=items; this.enabled=enabled; this.font=font; this.area=nextArea; this.opacity=nextOpacity; this.controlsVisible=controlsVisible
         if (fontChanged) { cache.evictAll(); paintedSize=0f }
         if (reset) { last=Double.NaN; labels.clear() }
         visibility=if (enabled) VISIBLE else GONE
