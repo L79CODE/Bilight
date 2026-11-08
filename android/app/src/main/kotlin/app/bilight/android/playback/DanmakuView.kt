@@ -10,6 +10,7 @@ import android.view.View
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.Player
+import app.bilight.android.BuildConfig
 import app.bilight.android.core.clean
 import app.bilight.android.core.invalid
 import app.bilight.android.core.BiliFailure
@@ -138,6 +139,11 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     private var insetRight=0
     private var insetBottom=0
     private val location=IntArray(2)
+    // DEBUG ONLY: drawn frame counter, so a screenshot shows the real cadence.
+    private val debugPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=Color.YELLOW; textSize=28f; typeface=android.graphics.Typeface.DEFAULT_BOLD }
+    private var debugFrames=0
+    private var debugStart=0L
+    private var debugFps=0
     private data class Label(val item: Danmaku,val lane: Int,val width: Float,val speed: Float,val bitmap: Bitmap)
     private val labels=mutableListOf<Label>()
     init { isClickable=false; importantForAccessibility=IMPORTANT_FOR_ACCESSIBILITY_NO }
@@ -157,9 +163,23 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
     // invalidate() from inside a Choreographer callback can be folded into the next frame when the
     // current vsync has already scheduled its traversal, which halves the effective frame rate.
     // postInvalidateOnAnimation() explicitly asks for the next animation frame instead.
-    override fun doFrame(frameTimeNanos: Long) { scheduled=false; if (!enabled || !isAttachedToWindow) return; postInvalidateOnAnimation(); if (player?.isPlaying==true) start() }
+    override fun doFrame(frameTimeNanos: Long) {
+        scheduled=false
+        if (!enabled || !isAttachedToWindow) return
+        invalidate()
+        // Force the host chain to redraw as well: a Compose AndroidView can otherwise skip painting
+        // when only this child is dirty.
+        (parent as? View)?.invalidate()
+        if (player?.isPlaying==true) start()
+    }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas); val player=player ?: return; if (!enabled || items.isEmpty()) return
+        if (BuildConfig.DEBUG) {
+            val now=System.nanoTime()
+            if (debugStart==0L) debugStart=now
+            debugFrames++
+            if (now-debugStart>=1_000_000_000L) { debugFps=debugFrames; debugFrames=0; debugStart=now }
+        }
         val time=player.currentPosition/1000.0
         // Window insets and the on-screen offset only change on rotation/resize, so they are
         // refreshed periodically instead of on every frame.
@@ -217,6 +237,7 @@ class DanmakuView(context: Context): View(context),Choreographer.FrameCallback {
             canvas.drawBitmap(label.bitmap,x-renderPad,baseline-renderPad+renderAscent,bitmapPaint)
         }
         canvas.restore(); last=time
+        if (BuildConfig.DEBUG) canvas.drawText("$debugFps fps",24f,64f,debugPaint)
     }
     /** Rasterizes one label (outline + fill + shadow) once; the LruCache keeps repeats free. */
     private fun labelFor(text: String): Bitmap? {
