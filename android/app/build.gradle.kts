@@ -15,11 +15,20 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
-  // Android Studio and the CLI must use the same existing local development key.
-  // Keep its private material outside the repository; other checkouts retain the SDK default.
+  // Prefer a local development key when present; otherwise fall back to the checked-in debug key so
+  // CI builds keep a stable signature and can be installed over the previous build with adb -r.
   signingConfigs.getByName("debug") {
     val localKey = rootProject.file("../../Local/Dependencies/Android/user/debug.keystore")
-    if (localKey.isFile) storeFile = localKey
+    val repoKey = rootProject.file("debug.keystore")
+    when {
+      localKey.isFile -> storeFile = localKey
+      repoKey.isFile -> {
+        storeFile = repoKey
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
+    }
   }
 
   buildTypes {
